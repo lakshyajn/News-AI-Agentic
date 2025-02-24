@@ -4,6 +4,8 @@ from transformers import pipeline
 from googletrans import Translator
 import requests
 import asyncio
+import torch
+from diffusers import StableDiffusionPipeline
 from datetime import datetime
 from backend.db import articles_collection
 from backend.cleanup import delete_old_articles
@@ -70,7 +72,10 @@ def process_article(article):
         summary_hindi = translator.translate(summary, src="en", dest="hi").text
         article["summary"] = summary
         article["summary_hindi"] = summary_hindi
-        article["image_url"] = generate_image(article["title"])  # AI Image
+        image_prompt = article['title'].split()[:5]  # Use first 5 words of title
+        image_url = generate_image_from_text(article['title'])    
+        article["image_url"] = image_url
+       
         return article
     except Exception as e:
         return None  # Skip article if processing fails
@@ -86,19 +91,76 @@ def fetch_and_store_news():
                 if processed_article:
                     articles_collection.insert_one(processed_article)
 
-# ✅ Generate AI Image
-def generate_image(prompt):
-    try:
-        response = requests.post("https://stablediffusionapi.com/generate", json={"prompt": prompt})
-        data = response.json()
-        image_url = data.get("image_url")  # ✅ Extract image URL properly
 
-        # ✅ Ensure the image URL is valid
-        if image_url and image_url.startswith("http"):
-            return image_url
-        return "https://via.placeholder.com/400"  # ✅ Placeholder image if API fails
-    except:
-        return "https://via.placeholder.com/400"  # ✅ Default fallback image
+
+STABILITY_API_KEY = "sk-aqmyHE3qY1eKl7CMbuosSE5K7tgxyAVl81cEYso8eAeAdZMS"  # Replace with your actual API key
+STABILITY_API_URL = "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image"
+
+def generate_image_from_text(text):
+    """
+    Generate an image using Stability AI
+    """
+    print(f"Generating image for text: {text}")  # Debug log
+    
+    try:
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {STABILITY_API_KEY}"
+        }
+        
+        payload = {
+            "text_prompts": [
+                {
+                    "text": f"professional photojournalistic photograph of {text}, high quality, realistic, 4k, news style",
+                    "weight": 1
+                }
+            ],
+            "cfg_scale": 7,
+            "height": 1024,
+            "width": 1024,
+            "samples": 1,
+            "steps": 30,
+        }
+        
+        print("Sending request to Stability AI...")  # Debug log
+        response = requests.post(STABILITY_API_URL, headers=headers, json=payload)
+        print(f"Stability AI Response Status: {response.status_code}")  # Debug log
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            if 'artifacts' in data and len(data['artifacts']) > 0:
+                # Get the base64 image and convert to a data URL
+                image_base64 = data['artifacts'][0]['base64']
+                image_url = f"data:image/png;base64,{image_base64}"
+                print("Successfully generated image")  # Debug log
+                return image_url
+            
+        print(f"API Response: {response.text}")  # Debug log
+        
+        # Fallback to Unsplash if Stability AI fails
+        print("Falling back to Unsplash...")  # Debug log
+        return f"https://source.unsplash.com/1200x800/?{text.replace(' ', ',')}"
+        
+    except Exception as e:
+        print(f"Error in image generation: {str(e)}")  # Debug log
+        return "https://via.placeholder.com/1200x800?text=News+Image"
+
+# Test endpoint
+@app.get("/test-image-generation/{text}")
+async def test_image_generation(text: str):
+    """
+    Test endpoint to verify image generation
+    """
+    try:
+        image_url = generate_image_from_text(text)
+        return {
+            "status": "success",
+            "input_text": text,
+            "generated_url": image_url
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ✅ API: Fetch News & Store in DB
