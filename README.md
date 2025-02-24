@@ -1,6 +1,10 @@
 # Automated AI News Generator
 
-## Overview
+## Overview  
+[![YouTube Video Demo](https://github.com/user-attachments/assets/e6f2a97c-8214-47cd-9510-5e58295c4f3a)](https://youtu.be/D0AkONTA-Qw)  
+
+**[Demo Link](https://youtu.be/D0AkONTA-Qw)**
+
 The **Automated AI News Generator** is an autonomous AI agent designed to search, summarize, optimize, and publish news articles across various topics, including current events, crime, sports, politics, and more. The system operates at both global and local levels, ensuring comprehensive coverage and accurate news delivery.
 
 ## Features
